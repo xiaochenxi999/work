@@ -1,0 +1,74 @@
+#include <iostream>
+#include "opencv2/core/core.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+using namespace cv;
+using namespace std;
+void HomoFiltergray(Mat srcImg, Mat &dst);
+
+int main()
+{
+    Mat src_mat = imread("E:\\lean1.jpg");
+    imshow("原图", src_mat); waitKey(); imwrite("E:\\sublime\\zcache\\01原图.jpg", src_mat);
+    Mat imgGray;
+    cvtColor(src_mat, imgGray, CV_RGB2GRAY);
+    Mat dst_mat(imgGray.rows, imgGray.cols, imgGray.type());
+    HomoFiltergray(imgGray, dst_mat);
+    imshow("同态滤波后", dst_mat); waitKey(); imwrite("E:\\sublime\\zcache\\09同态滤波图.jpg", dst_mat);
+    return 0;
+}
+
+void HomoFiltergray(Mat imgSrc, Mat &dst)
+{
+
+    imgSrc.convertTo(imgSrc, CV_64FC1);
+    dst.convertTo(dst, CV_64FC1);
+
+
+    //取对数
+    Mat imgLog = imgSrc.clone();
+    imgLog = imgLog + 0.0001;
+    log(imgLog, imgLog);
+
+
+    //傅里叶
+    Mat imgFouri = Mat::zeros(imgSrc.rows, imgSrc.cols, CV_64FC1);
+    dct(imgLog, imgFouri);
+
+    //频域滤波
+    Mat imgFilter = Mat::zeros(imgSrc.rows, imgSrc.cols, CV_64FC1);
+    Mat H_u_v;
+    double rH = 1.5;
+    double rL = 0.5;
+    double C = 1;
+    double d0 = 20;// (imgSrc.rows / 2)*(imgSrc.rows / 2) + (imgSrc.cols / 2)*(imgSrc.cols / 2);
+    double d2 = 0;
+    H_u_v = Mat::zeros(imgSrc.rows, imgSrc.cols, CV_64FC1);
+    double totalWeight = 0.0;
+    for (int i = 0; i < imgSrc.rows; i++)
+    {
+        double * dataH_u_v = H_u_v.ptr<double>(i);
+        for (int j = 0; j < imgSrc.cols; j++)
+        {
+            d2 = pow((i), 2.0) + pow((j), 2.0);
+            dataH_u_v[j] = (rH - rL)*(1 - exp(-C*d2 / d0)) + rL;
+            totalWeight += dataH_u_v[j];
+        }
+    }
+    H_u_v.ptr<double>(0)[0] = 1.1;
+    imgFilter = imgFouri.mul(H_u_v);
+
+    //反傅里叶 
+    Mat imgInvFouri = Mat::zeros(imgSrc.rows, imgSrc.cols, CV_64FC1);
+    idct(imgFilter, imgInvFouri);
+
+    //指数变换
+    Mat imgExp = imgInvFouri.clone();
+    exp(imgExp, imgExp);
+    imgExp = imgExp-0.0001;
+
+
+    //变换数据格式  
+    dst = imgExp.clone();
+    dst.convertTo(dst, CV_8UC1);
+}
